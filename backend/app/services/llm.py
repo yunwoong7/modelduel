@@ -3,13 +3,12 @@ import asyncio
 import logging
 import base64
 import httpx
-from typing import List, Dict, Optional, Generator, Union, Tuple
+from typing import List, Dict, Optional, Generator, Union, Tuple, AsyncGenerator
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
 from langchain_aws import ChatBedrockConverse
 from langchain_core.prompts import ChatPromptTemplate
-import boto3
 
 # 환경 변수 로드 및 로깅 설정
 load_dotenv()
@@ -24,10 +23,6 @@ class ChatLLM:
         self.system_prompt = system_prompt
         self.instruction_prompt = INSTRUCTION_PROMPT
         self.message_history: List[Dict[str, str]] = []
-        self.bedrock = boto3.client(
-            service_name='bedrock-runtime',
-            region_name='us-east-1'
-        )
 
         temperature = float(os.getenv("AWS_TEMPERATURE", 0))
         max_tokens = int(os.getenv("AWS_MAX_TOKENS", 1024))
@@ -109,7 +104,7 @@ class ChatLLM:
             formatted_message = prompt_template.invoke(input=messages)
             return formatted_message, history_message
 
-    async def stream_chat(self, prompt: str, image: Optional[str] = None) -> Generator[str, None, None]:
+    async def stream_chat(self, prompt: str, image: Optional[str] = None) -> AsyncGenerator[str, None]:
         try:
             formatted_message, history_message = self._build_message(prompt, image)
             complete_response = ""

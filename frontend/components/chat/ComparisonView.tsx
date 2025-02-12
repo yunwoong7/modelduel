@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Bot, User, Send, ImagePlus, X, Loader2, Plus, Trash2, ArrowDown } from "lucide-react";
+import { Bot, User, Send, ImagePlus, X, Loader2, Plus, Trash2, ArrowDown, Eraser } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -143,18 +143,18 @@ export function ComparisonView() {
     setLoading(true);
     try {
       await Promise.all(chats.map(async chat => {
-        const response = await fetch('/api/chat/compare', {
+        const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
             'Accept': 'text/event-stream',
           },
           body: JSON.stringify({
-            prompt: currentPrompt,  // 저장된 값 사용
-            image: currentImage,    // 저장된 값 사용
+            prompt: currentPrompt,
+            image: currentImage,
             model: chat.modelId,
             chatId: chat.id,
-            system_prompt: systemPrompt  // 시스템 프롬프트 전달
+            system_prompt: systemPrompt
           }),
         });
 
@@ -191,11 +191,14 @@ export function ComparisonView() {
           for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
-                const data = JSON.parse(line.slice(6));
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr) continue;
+
+                const data = JSON.parse(jsonStr);
                 const newChunk = data.data || data.chunk || '';
-                if (newChunk && !currentMessage.endsWith(newChunk)) {
-                  currentMessage += newChunk;
-                  
+                
+                if (newChunk) {
+                  currentMessage = currentMessage + newChunk;
                   setChats(prev => prev.map(c => 
                     c.id === chat.id 
                       ? {
@@ -210,7 +213,8 @@ export function ComparisonView() {
                   ));
                 }
               } catch (e) {
-                // 에러 로깅 제거
+                console.error('Error processing chunk:', e, line);
+                continue;
               }
             }
           }
@@ -236,11 +240,13 @@ export function ComparisonView() {
     } else {
       // 대화 내용이 없으면 바로 모델 변경
       try {
-        await fetch(`/api/chat/${chatId}`, {
-          method: 'DELETE'
+        await fetch('/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId })
         });
 
-        const response = await fetch('/api/chat/compare', {
+        const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -249,7 +255,7 @@ export function ComparisonView() {
             prompt: '',
             model: newModelId,
             chatId: chatId,
-            system_prompt: systemPrompt  // 시스템 프롬프트 전달
+            system_prompt: systemPrompt
           }),
         });
 
@@ -279,11 +285,13 @@ export function ComparisonView() {
     const { chatId, newModelId } = pendingModelChange;
 
     try {
-      await fetch(`/api/chat/${chatId}`, {
-        method: 'DELETE'
+      await fetch('/api/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId })
       });
 
-      const response = await fetch('/api/chat/compare', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -292,7 +300,7 @@ export function ComparisonView() {
           prompt: '',
           model: newModelId,
           chatId: chatId,
-          system_prompt: systemPrompt  // 시스템 프롬프트 전달
+          system_prompt: systemPrompt
         }),
       });
 
@@ -321,45 +329,38 @@ export function ComparisonView() {
   // 초기화 처리 함수
   const handleClearChat = async (chatId: string) => {
     try {
-      // 백엔드에 초기화 요청
-      await fetch(`/api/chat/${chatId}/clear`, {
-        method: 'POST'
+      await fetch('/api/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId })
       });
-
-      // UI 초기화
+      
+      // 채팅 메시지 초기화
       setChats(prev => prev.map(c => 
         c.id === chatId 
-          ? { ...c, messages: [] }
+          ? {
+              ...c,
+              messages: []
+            }
           : c
       ));
     } catch (error) {
-      console.error('Failed to clear chat:', error);
-      alert('대화 내용 초기화 중 오류가 발생했습니다.');
-    } finally {
-      setShowClearAlert(false);
-      setPendingClear(null);
+      console.error('Error clearing chat:', error);
     }
   };
 
   // 삭제 처리 함수
   const handleDeleteChat = async (chatId: string) => {
     try {
-      // 백엔드에 채팅 인스턴스 삭제 요청
-      await fetch(`/api/chat/${chatId}`, {
-        method: 'DELETE'
+      await fetch('/api/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId })
       });
 
-      // UI에서 채팅창 제거
       setChats(prev => prev.filter(c => c.id !== chatId));
-
-      // ModelSelectDialog의 선택 상태도 업데이트
-      const removedChat = chats.find(c => c.id === chatId);
-      if (removedChat) {
-        setShowModelSelect(false); // 다이얼로그가 열려있다면 닫기
-      }
     } catch (error) {
       console.error('Failed to delete chat instance:', error);
-      alert('채팅창 삭제 중 오류가 발생했습니다.');
     } finally {
       setShowDeleteAlert(false);
       setPendingDelete(null);
@@ -407,22 +408,36 @@ export function ComparisonView() {
     initializeChat();
   }, []);
 
-  const handleModelSelect = (selectedIds: string[]) => {
-    // 새로운 채팅 목록 생성
-    const newChats = selectedIds.map(modelId => {
-      // 기존 채팅 찾기
-      const existingChat = chats.find(chat => chat.modelId === modelId);
-      if (existingChat) return existingChat;
+  const handleModelSelect = async (selectedIds: string[]) => {
+    try {
+      // 삭제될 채팅 찾기
+      const chatsToDelete = chats.filter(chat => !selectedIds.includes(chat.modelId));
       
-      // 새 채팅 생성
-      return {
-        id: String(Date.now() + Math.random()),
-        modelId: modelId,
-        messages: []
-      };
-    });
+      // 삭제될 채팅의 인스턴스 삭제
+      await Promise.all(chatsToDelete.map(chat => 
+        fetch('/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chat.id })
+        })
+      ));
 
-    setChats(newChats);
+      // 새로운 채팅 목록 생성
+      const newChats = selectedIds.map(modelId => {
+        const existingChat = chats.find(chat => chat.modelId === modelId);
+        if (existingChat) return existingChat;
+        
+        return {
+          id: String(Date.now() + Math.random()),
+          modelId: modelId,
+          messages: []
+        };
+      });
+
+      setChats(newChats);
+    } catch (error) {
+      console.error('Failed to update chat instances:', error);
+    }
   };
 
   // 스크롤 버튼 클릭 핸들러 추가
@@ -449,6 +464,21 @@ export function ComparisonView() {
     setTimeout(() => {
       setShowModelSelect(true);
     }, 100);
+  };
+
+  // AlertDialog의 확인 버튼에 연결
+  const handleConfirmClear = async () => {
+    if (!pendingClear?.chatId) return;  // chatId 속성 접근
+    
+    await handleClearChat(pendingClear.chatId);  // chatId 전달
+    setShowClearAlert(false);
+    setPendingClear(null);
+  };
+
+  // 초기화 버튼 클릭 핸들러
+  const handleClearClick = (chatId: string) => {
+    setPendingClear({ chatId });  // 객체로 설정
+    setShowClearAlert(true);
   };
 
   // 모델이 없거나 채팅이 없을 때 보여줄 화면
@@ -575,30 +605,44 @@ export function ComparisonView() {
                     )}
                   </div>
                   {/* 기존 버튼들 */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => {
-                      setPendingClear({ chatId: chat.id });
-                      setShowClearAlert(true);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                  {chats.length > 1 && (
+                  <div className="flex items-center">
+                    {/* 초기화 버튼 */}
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => {
-                        setPendingDelete({ chatId: chat.id });
-                        setShowDeleteAlert(true);
-                      }}
+                      onClick={() => handleClearClick(chat.id)}
+                      disabled={!chat.messages.length}
+                      className={cn(
+                        "h-8 w-8",
+                        chat.messages.length > 0
+                          ? "text-muted-foreground hover:text-foreground"
+                          : "text-muted-foreground/30 cursor-not-allowed opacity-50"
+                      )}
                     >
-                      <X className="h-4 w-4" />
+                      <Eraser className="h-4 w-4" />
                     </Button>
-                  )}
+
+                    {/* 삭제 버튼 */}
+                    {chats.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setPendingDelete({ chatId: chat.id });
+                          setShowDeleteAlert(true);
+                        }}
+                        disabled={!chat.messages.length}
+                        className={cn(
+                          "h-8 w-8",
+                          chat.messages.length > 0
+                            ? "hover:bg-destructive/10 hover:text-destructive"
+                            : "text-muted-foreground/30 cursor-not-allowed opacity-50"
+                        )}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -638,7 +682,7 @@ export function ComparisonView() {
                         message.role === 'user'
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted/50 ring-1 ring-primary/10",
-                        "max-w-[85%]"
+                        "max-w-[65%] md:max-w-[55%] lg:max-w-[45%]"
                       )}>
                         {message.image && (
                           <div className="mb-2">
@@ -649,48 +693,48 @@ export function ComparisonView() {
                             />
                           </div>
                         )}
-                        <div className="break-words">
+                        <div className="whitespace-pre-wrap break-words">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeRaw]}
                             components={{
-                              // 코드 블록 스타일링
-                              code({ node, inline, className, children, ...props }) {
-                                const match = /language-(\w+)/.exec(className || '');
-                                return !inline ? (
-                                  <pre className="p-4 bg-muted rounded-lg overflow-x-auto">
-                                    <code className={cn(
-                                      "relative font-mono text-sm",
-                                      className
-                                    )} {...props}>
-                                      {children}
-                                    </code>
-                                  </pre>
-                                ) : (
-                                  <code className="px-1 py-0.5 font-mono text-sm bg-muted rounded" {...props}>
-                                    {children}
-                                  </code>
-                                );
-                              },
-                              // 링크 스타일링
-                              a: ({ node, ...props }) => (
-                                <a
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary underline hover:no-underline"
-                                  {...props}
-                                />
+                              p: ({ children }) => (
+                                <p className="mb-1.5 last:mb-0 leading-5 text-[14px] whitespace-pre-line">
+                                  {children}
+                                </p>
                               ),
-                              // 기타 마크다운 요소 스타일링
-                              p: ({ children }) => <p className="mb-4 last:mb-0">{children}</p>,
-                              ul: ({ children }) => <ul className="mb-4 list-disc pl-4">{children}</ul>,
-                              ol: ({ children }) => <ol className="mb-4 list-decimal pl-4">{children}</ol>,
-                              li: ({ children }) => <li className="mb-2 last:mb-0">{children}</li>,
-                              h1: ({ children }) => <h1 className="text-2xl font-bold mb-4">{children}</h1>,
-                              h2: ({ children }) => <h2 className="text-xl font-bold mb-3">{children}</h2>,
-                              h3: ({ children }) => <h3 className="text-lg font-bold mb-2">{children}</h3>,
+                              ul: ({ children }) => (
+                                <ul className="mb-2 list-disc pl-4 space-y-0.5">
+                                  {children}
+                                </ul>
+                              ),
+                              ol: ({ children }) => (
+                                <ol className="mb-2 list-decimal pl-4 space-y-0.5">
+                                  {children}
+                                </ol>
+                              ),
+                              li: ({ children }) => (
+                                <li className="leading-5">
+                                  {children}
+                                </li>
+                              ),
+                              h1: ({ children }) => (
+                                <h1 className="text-lg font-bold mb-1.5 mt-2 first:mt-0">
+                                  {children}
+                                </h1>
+                              ),
+                              h2: ({ children }) => (
+                                <h2 className="text-base font-bold mb-1.5 mt-2 first:mt-0">
+                                  {children}
+                                </h2>
+                              ),
+                              h3: ({ children }) => (
+                                <h3 className="text-sm font-bold mb-1 mt-1.5 first:mt-0">
+                                  {children}
+                                </h3>
+                              ),
                               blockquote: ({ children }) => (
-                                <blockquote className="border-l-4 border-primary/50 pl-4 italic">
+                                <blockquote className="border-l-2 border-primary/30 pl-2 py-0.5 my-1 italic">
                                   {children}
                                 </blockquote>
                               ),
@@ -814,21 +858,12 @@ export function ComparisonView() {
           <AlertDialogHeader>
             <AlertDialogTitle>대화 내용 초기화</AlertDialogTitle>
             <AlertDialogDescription>
-              현재 대화 내용이 모두 삭제됩니다. 계속하시겠습니까?
+              정말 대화 내용을 초기화하시겠습니까?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setShowClearAlert(false);
-              setPendingClear(null);
-            }}>
-              취소
-            </AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={() => pendingClear && handleClearChat(pendingClear.chatId)}
-            >
-              확인
-            </AlertDialogAction>
+            <AlertDialogCancel onClick={() => setShowClearAlert(false)}>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmClear}>확인</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -10,6 +10,7 @@ import uuid
 from fastapi.staticfiles import StaticFiles
 from app.services.model_service import ModelService
 import os
+import json  # json 모듈 추가
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -47,11 +48,37 @@ class ChatRequest(BaseModel):
     chatId: Optional[str] = None
     system_prompt: Optional[str] = None  # 시스템 프롬프트 추가
 
-@app.post("/api/chat/compare")
-async def chat_compare(request: ChatRequest):
+class ClearRequest(BaseModel):
+    chat_id: str
+
+class DeleteRequest(BaseModel):
+    chat_id: str
+
+@app.post("/api/clear")
+async def clear_chat(request: ClearRequest):
+    logger.info(f"Received clear request with body: {request}")  # 요청 바디 로깅
+    logger.info(f"Available instances before clear: {list(chat_instances.keys())}")  # 현재 인스턴스 목록
+    
+    if request.chat_id in chat_instances:
+        chat_instances[request.chat_id].clear_message_history()
+        logger.info(f"Successfully cleared chat: {request.chat_id}")  # 성공 로그
+        return {"status": "success"}
+    else:
+        logger.error(f"Chat instance not found: {request.chat_id}")  # 에러 로그
+        raise HTTPException(status_code=404, detail=f"Chat instance {request.chat_id} not found")
+
+@app.post("/api/delete")  # DELETE 대신 POST 사용
+async def delete_chat(request: DeleteRequest):
+    if request.chat_id in chat_instances:
+        del chat_instances[request.chat_id]
+    return {"status": "success"}
+
+@app.post("/api/chat")
+async def chat(request: ChatRequest):
     try:
-        logger.info(f"Chat request - Model: {request.model}, Prompt: {request.prompt}")
-        
+        logger.info(f"Chat request - Model: {request.model}, ChatId: {request.chatId}")
+        logger.info(f"Current chat instances: {list(chat_instances.keys())}")
+        print(request.chatId)
         # chatId가 없으면 새로 생성
         if not request.chatId:
             request.chatId = str(uuid.uuid4())
@@ -67,8 +94,9 @@ async def chat_compare(request: ChatRequest):
             model_id = request.model or 'anthropic.claude-3-sonnet-20240229-v1:0'
             chat_instances[request.chatId] = ChatLLM(
                 model_id=model_id,
-                system_prompt=request.system_prompt  # 시스템 프롬프트 전달
+                system_prompt=request.system_prompt
             )
+            logger.info(f"Created new chat instance with ID: {request.chatId}")  # 로그 추가
 
         llm = chat_instances[request.chatId]
 
@@ -82,10 +110,18 @@ async def chat_compare(request: ChatRequest):
         async def generate():
             first_chunk = True
             async for chunk in llm.stream_chat(request.prompt, request.image):
+                # 줄바꿈이 포함된 청크를 JSON으로 안전하게 직렬화
+                response_data = {
+                    "chunk": chunk,
+                    "chatId": request.chatId
+                }
+                
                 if first_chunk:
                     logger.info(f"Response: {chunk[:100]}...")
                     first_chunk = False
-                yield f'data: {{"chunk": "{chunk}", "chatId": "{request.chatId}"}}\n\n'
+                    
+                # json.dumps()를 사용하여 안전하게 JSON 문자열로 변환
+                yield f'data: {json.dumps(response_data)}\n\n'
 
         return StreamingResponse(
             generate(),
@@ -94,19 +130,6 @@ async def chat_compare(request: ChatRequest):
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-# 채팅 인스턴스 정리를 위한 엔드포인트 (선택사항)
-@app.delete("/api/chat/{chat_id}")
-async def delete_chat(chat_id: str):
-    if chat_id in chat_instances:
-        del chat_instances[chat_id]
-    return {"status": "success"}
-
-@app.post("/api/chat/{chat_id}/clear")
-async def clear_chat(chat_id: str):
-    if chat_id in chat_instances:
-        chat_instances[chat_id].clear_message_history()
-    return {"status": "success"}
 
 @app.get("/api/models")
 async def get_models():

@@ -5,12 +5,10 @@
 .docker/
 
 # dependencies
-node_modules/
-.next/
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-frontend/build/
+frontend/node_modules
+frontend/.next
+frontend/out
+frontend/build
 frontend/.env*
 !frontend/.env.template
 
@@ -29,8 +27,12 @@ backend/.env.local
 # testing
 /coverage
 
+# next.js
+frontend/.next
+frontend/out
+
 # production
-/build
+frontend/build
 
 # misc
 .DS_Store
