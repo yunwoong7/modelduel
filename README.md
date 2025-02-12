@@ -140,3 +140,36 @@ providers:
 │   └── static/       # 정적 파일 (아이콘 등)
 └── ...
 ```
+
+## Docker로 실행 (옵션)
+
+Docker를 사용하여 애플리케이션을 실행할 수 있습니다.
+
+1. 환경 설정
+   ```bash
+   # backend/.env 파일 설정
+   cp backend/.env.template backend/.env
+   # backend/.env 파일을 열어 AWS 자격 증명 정보 입력
+   ```
+
+2. Docker Compose로 실행
+   ```bash
+   # 컨테이너 빌드 및 실행
+   docker-compose up --build
+
+   # 또는 백그라운드에서 실행
+   docker-compose up --build -d
+   ```
+
+3. 접속
+   - 프론트엔드: http://localhost:3001
+   - 백엔드: http://localhost:8001
+
+4. 컨테이너 중지
+   ```bash
+   docker-compose down
+   ```
+
+### 참고
+- Docker 실행 시에는 별도의 로컬 환경 설정이 필요하지 않습니다.
+- 로컬 실행과 Docker 실행은 독립적으로 작동합니다.

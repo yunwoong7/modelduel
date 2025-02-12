@@ -4,7 +4,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   console.log('Clear request body:', body);  // 요청 바디 로깅
   
-  const response = await fetch('http://localhost:8000/api/clear', {
+  const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const response = await fetch(`${apiUrl}/api/clear`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -4,7 +4,8 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     
-    const response = await fetch('http://localhost:8000/api/delete', {
+    const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const response = await fetch(`${apiUrl}/api/delete`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

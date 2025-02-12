@@ -8,7 +8,8 @@ services:
     ports:
       - "3001:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8001
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+      - API_URL=http://backend:8000
     depends_on:
       - backend
 
@@ -18,9 +19,5 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8001:8000"
-    environment:
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION}
-      - AWS_TEMPERATURE=${AWS_TEMPERATURE}
-      - AWS_MAX_TOKENS=${AWS_MAX_TOKENS} 
+    env_file:
+      - ./backend/.env

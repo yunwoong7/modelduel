@@ -4,10 +4,12 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     
-    const response = await fetch('http://localhost:8000/api/chat', {
+    const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const response = await fetch(`${apiUrl}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
       },
       body: JSON.stringify(body),
     });

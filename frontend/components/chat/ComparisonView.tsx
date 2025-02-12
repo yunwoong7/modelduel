@@ -27,7 +27,7 @@ interface Message {
   content: string;
   modelId: string;
   role: 'user' | 'assistant';
-  image?: string;
+  image?: string | null;
 }
 
 interface ModelChat {
@@ -69,7 +69,7 @@ export function ComparisonView() {
   const [modelSelectLoading, setModelSelectLoading] = useState(false);
 
   // 각 채팅창의 스크롤 ref를 관리하기 위한 Map
-  const scrollRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const scrollRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
   
   // 특정 채팅창의 스크롤을 맨 아래로 이동
   const scrollToBottom = (chatId: string) => {
@@ -231,7 +231,7 @@ export function ComparisonView() {
   const handleModelChange = async (chatId: string, newModelId: string) => {
     // 현재 채팅창의 메시지 수 확인
     const chat = chats.find(c => c.id === chatId);
-    const hasMessages = chat?.messages.length > 0;
+    const hasMessages = (chat?.messages || []).length > 0;
 
     if (hasMessages) {
       // 대화 내용이 있을 때만 확인 알림 표시
@@ -648,7 +648,9 @@ export function ComparisonView() {
 
               {/* 채팅 메시지 영역 */}
               <div 
-                ref={el => el && scrollRefs.current.set(chat.id, el)}
+                ref={(el: HTMLDivElement | null) => {
+                  scrollRefs.current.set(chat.id, el);
+                }}
                 onScroll={(e) => handleScroll(chat.id, e)}
                 className="flex-1 overflow-y-auto px-4 py-6 bg-background/50"
               >

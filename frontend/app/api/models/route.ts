@@ -2,7 +2,9 @@ import { NextRequest } from 'next/server';
 
 export async function GET(req: NextRequest) {
   try {
-    const response = await fetch('http://localhost:8000/api/models', {
+    // 서버 사이드에서는 API_URL을 먼저 확인
+    const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const response = await fetch(`${apiUrl}/api/models`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

@@ -2,8 +2,21 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { ModelInfo } from "@/types/model";
 import Image from "next/image";
+
+interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  provider_name: string;
+  icon_url: string;
+  provider_icon_url: string;
+  capabilities: {
+    text: boolean;
+    image: boolean;
+    code: boolean;
+  };
+}
 
 interface ModelSelectDialogProps {
   open: boolean;
